@@ -426,15 +426,19 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="14"
                                            Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                 <TextBlock x:Name="FolderText" Grid.Column="1" FontSize="13" VerticalAlignment="Center"
                                            Foreground="#C8B39E" TextTrimming="CharacterEllipsis"
                                            Text="Drop a music folder here, or choose one"/>
-                                <Button x:Name="RescanButton" Grid.Column="2" Style="{StaticResource SmallButton}" Content="Rescan"
+                                <Button x:Name="FindCoversButton" Grid.Column="2" Style="{StaticResource SmallButton}" Content="Find covers"
+                                        Margin="0,0,6,0" IsEnabled="False" Click="FindCovers_Click"
+                                        ToolTip="Look up missing covers on iTunes (one lookup per album). Shown as a preview; written with the tags."/>
+                                <Button x:Name="RescanButton" Grid.Column="3" Style="{StaticResource SmallButton}" Content="Rescan"
                                         Margin="0,0,6,0" IsEnabled="False" Click="Rescan_Click"/>
-                                <Button x:Name="ChooseButton" Grid.Column="3" Style="{StaticResource SmallButton}" Content="Choose folder"
+                                <Button x:Name="ChooseButton" Grid.Column="4" Style="{StaticResource SmallButton}" Content="Choose folder"
                                         Click="Choose_Click"/>
                             </Grid>
                         </Border>
@@ -535,7 +539,17 @@
                                                     <TextBlock Text="{Binding TrackText}" Style="{StaticResource Num}"/>
                                                     <TextBlock Text="{Binding NewTrackText}" Style="{StaticResource NewValue}" FontFamily="Consolas"/>
                                                 </StackPanel>
-                                                <TextBlock Grid.Column="6" Text="{Binding CoverText}" Style="{StaticResource Num}"/>
+                                                <!-- a found cover sits on top of the "no"; hover for a bigger preview -->
+                                                <Grid Grid.Column="6" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding CoverText}" Style="{StaticResource Num}"/>
+                                                    <Image Source="{Binding NewCoverThumb}" MaxWidth="30" MaxHeight="30" HorizontalAlignment="Left">
+                                                        <Image.ToolTip>
+                                                            <ToolTip>
+                                                                <Image Source="{Binding NewCoverThumb}" Width="200" Height="200"/>
+                                                            </ToolTip>
+                                                        </Image.ToolTip>
+                                                    </Image>
+                                                </Grid>
                                                 <TextBlock Grid.Column="7" Text="{Binding LengthText}" Style="{StaticResource Num}"/>
                                                 <TextBlock Grid.Column="8" Text="{Binding BitrateText}" Style="{StaticResource Kbps}"/>
                                             </Grid>

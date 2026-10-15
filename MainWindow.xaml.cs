@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -99,7 +100,8 @@ public partial class MainWindow : Window
             var fixable = _songs.Count(s => s.HasChanges);
             var groups = _dupes.Count(s => s.IsKeeper);
             var low = _songs.Count(s => s.IsLowBitrate);
-            SummaryText.Text = $"{_songs.Count} files  ·  {fixable} need tags  ·  {groups} duplicated  ·  {low} low bitrate"
+            var noCover = _songs.Count(s => !s.HasCover);
+            SummaryText.Text = $"{_songs.Count} files  ·  {fixable} need tags  ·  {noCover} no cover  ·  {groups} duplicated  ·  {low} low bitrate"
                              + (unreadable > 0 ? $"  ·  {unreadable} unreadable" : "");
             SetStatus(_songs.Count == 0 ? "No MP3 or M4A files in that folder." : $"Scanned {_songs.Count} files.",
                       _songs.Count > 0);
@@ -159,7 +161,7 @@ public partial class MainWindow : Window
             return;
         var question = dupes
             ? $"Move {picked.Count} file(s) to the Recycle Bin?"
-            : $"Write the new tags to {picked.Count} file(s)? Only the orange values are written.";
+            : $"Write the new tags to {picked.Count} file(s)? Only the orange values and new covers are written.";
         if (MessageBox.Show(this, question, "ShibaTag", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
 
@@ -189,11 +191,89 @@ public partial class MainWindow : Window
         if (errors.Count > 0) SetMascot(ShibaMood.Sad, "Some files wouldn't budge. Are they open in a player?");
     }
 
+    // ---- covers ----
+
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
+
+    /// <summary>Looks up covers for files without one: one iTunes lookup per album folder, one per single.
+    /// Found covers only become a preview (thumbnail + ticked row); "Write tags" writes them.</summary>
+    private async void FindCovers_Click(object sender, RoutedEventArgs e)
+    {
+        var groups = _songs.Where(s => !s.HasCover && s.NewCover == null)
+            .GroupBy(s => Music.CoverQuery(s).Album is { } album ? $"{Path.GetDirectoryName(s.Path)}|{album}" : s.Path)
+            .ToList();
+        if (groups.Count == 0)
+        {
+            SetStatus("Every file already has a cover.", true);
+            return;
+        }
+
+        SetBusy(true);
+        SetMascot(ShibaMood.Neutral, "Fetching covers from iTunes...");
+        int found = 0, missed = 0;
+        string? stopped = null;
+        for (var i = 0; i < groups.Count && stopped == null; i++)
+        {
+            var q = Music.CoverQuery(groups[i].First());
+            SetStatus($"Looking up cover {i + 1}/{groups.Count}: {q.Album ?? q.Title}", null);
+            try
+            {
+                if (await Music.FindCoverAsync(Http, q.Artist, q.Album, q.Title) is not { } jpg || Thumb(jpg) is not { } thumb)
+                {
+                    missed++;
+                    continue;
+                }
+                foreach (var s in groups[i]) { s.NewCover = jpg; s.NewCoverThumb = thumb; s.Apply = true; }
+                found++;
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests)
+            {
+                stopped = "iTunes asked me to slow down. Press Find covers again in a minute; covers found so far are kept.";
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                stopped = "Couldn't reach iTunes: " + ex.Message;
+            }
+            catch
+            {
+                missed++; // odd response for this one; carry on with the rest
+            }
+        }
+        SetBusy(false);
+        TagList.Items.Refresh();
+        AllCheck.IsChecked = _songs.Any(s => s.Apply);
+
+        SetStatus(stopped ?? $"Covers found for {found} of {groups.Count} albums/singles. Hover a thumbnail to preview, then write.",
+                  stopped == null ? found > 0 : false);
+        SetMascot(found > 0 ? ShibaMood.Happy : ShibaMood.Sad,
+                  found > 0 ? "Fetched some covers! Have a look, then press Write." :
+                  stopped != null ? "Ruff, iTunes isn't playing fetch right now." :
+                  "No covers found. iTunes doesn't know these ones.");
+    }
+
+    /// <summary>Decodes the JPEG once for the list; null if it isn't a usable image (then it's never written).</summary>
+    private static ImageSource? Thumb(byte[] jpg)
+    {
+        try
+        {
+            var b = new System.Windows.Media.Imaging.BitmapImage();
+            b.BeginInit();
+            b.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            b.DecodePixelWidth = 200;
+            b.StreamSource = new MemoryStream(jpg);
+            b.EndInit();
+            b.Freeze();
+            return b;
+        }
+        catch { return null; }
+    }
+
     // ---- misc ----
 
     private void SetBusy(bool busy)
     {
         ChooseButton.IsEnabled = !busy;
+        FindCoversButton.IsEnabled = !busy && _songs.Any(s => !s.HasCover && s.NewCover == null);
         RescanButton.IsEnabled = !busy && _root != null;
         OpenFolderButton.IsEnabled = !busy && _root != null;
         UpdateActionButton();

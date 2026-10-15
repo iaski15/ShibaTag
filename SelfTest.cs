@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Security.Cryptography;
 
 namespace ShibaTag;
@@ -29,6 +30,19 @@ public static class SelfTest
         Check("no-break space becomes a plain space", Music.ParseName("C:\\M\\A\\01 - Pitbull,\u00A0Sensato - X.mp3")?.Artist == "Pitbull, Sensato");
         Check("unparseable name ignored", Music.ParseName(@"C:\M\random video.mp3") is null);
 
+        // ---- cover matching on a canned iTunes response (no network) ----
+        const string json = """
+            {"resultCount":3,"results":[
+              {"artistName":"Someone Else","collectionName":"Global Warming","trackName":"Global Warming","artworkUrl100":"https://x/wrong/100x100bb.jpg"},
+              {"artistName":"Pitbull","collectionName":"Global Warming: Meltdown (Deluxe Version)","trackName":"Feel This Moment (feat. Christina Aguilera)","artworkUrl100":"https://x/gw/100x100bb.jpg"},
+              {"artistName":"Pitbull","collectionName":"Climate Change","trackName":"Global Warming (feat. Sensato)","artworkUrl100":"https://x/cc/100x100bb.jpg"}]}
+            """;
+        Check("album cover: artist must match, folder name is a prefix, upsized",
+              Music.PickArtwork(json, "Pitbull, Sensato", "Global Warming", "x") == "https://x/gw/600x600bb.jpg");
+        Check("single cover: matched by song title", Music.PickArtwork(json, "Pitbull", null, "Global Warming (feat. Sensato)") == "https://x/cc/600x600bb.jpg");
+        Check("no cover for an unknown album", Music.PickArtwork(json, "Pitbull", "Some Playlist", "x") is null);
+        Check("no cover for an unknown artist", Music.PickArtwork(json, "Nobody", "Global Warming", "x") is null);
+
         // ---- real files, on temp copies ----
         var originals = Directory.Exists(source) ? Directory.GetFiles(source, "*.mp3").Order().ToList() : [];
         if (originals.Count == 0)
@@ -50,6 +64,13 @@ public static class SelfTest
             var first = Music.ParseName(picks[0])!.Value;
             var single = Path.Combine(tmp, $"{first.Artist} - {first.Title}.mp3");
             File.Copy(picks[0], single);
+            // Start the copies untagged (as ShibaDownloader saves them), whatever state the originals are in.
+            foreach (var f in Directory.GetFiles(tmp, "*.mp3", SearchOption.AllDirectories))
+            {
+                using var t = TagLib.File.Create(f);
+                t.RemoveTags(TagLib.TagTypes.AllTags);
+                t.Save();
+            }
 
             var before = Music.Scan(tmp, out var bad);
             Check($"scan found {picks.Count + 1} files", before.Count == picks.Count + 1 && bad == 0);
@@ -74,6 +95,28 @@ public static class SelfTest
             var dups = Music.FindDuplicates(after);
             Check("planted duplicate found", dups.Count == 1 && dups[0].Count == 2 && dups[0].Any(s => s.Path == single));
             Check("one keeper per group", dups.All(g => g.Count(s => s.IsKeeper) == 1 && g.Count(s => s.Recycle) == g.Count - 1));
+
+            // Live iTunes lookup for the album copy; SKIP (not FAIL) when offline or rate-limited.
+            var albumSong = after.First(s => s.Track > 0);
+            var q = Music.CoverQuery(albumSong);
+            byte[]? jpg = null;
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+                jpg = Task.Run(() => Music.FindCoverAsync(http, q.Artist, q.Album, q.Title)).GetAwaiter().GetResult();
+                Check($"iTunes cover found for album \"{q.Album}\" ({jpg?.Length / 1024} KB)", jpg is { Length: > 1000 });
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                Console.WriteLine($"SKIP  iTunes cover lookup: {ex.Message}");
+            }
+            if (jpg != null)
+            {
+                albumSong.NewCover = jpg;
+                Music.Write(albumSong);
+                var reread = Music.Read(albumSong.Path);
+                Check("cover embedded and tags kept", reread.HasCover && reread.Title == albumSong.Title && reread.Track == albumSong.Track);
+            }
         }
         finally
         {

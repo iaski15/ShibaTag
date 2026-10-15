@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 
 namespace ShibaTag;
@@ -21,7 +22,9 @@ public sealed class Song
     public string? NewArtist { get; set; }
     public string? NewAlbum { get; set; }
     public uint? NewTrack { get; set; }
-    public bool HasChanges => NewTitle != null || NewArtist != null || NewAlbum != null || NewTrack != null;
+    public byte[]? NewCover { get; set; }                                // JPEG from Music.FindCoverAsync
+    public System.Windows.Media.ImageSource? NewCoverThumb { get; set; } // its preview in the list
+    public bool HasChanges => NewTitle != null || NewArtist != null || NewAlbum != null || NewTrack != null || NewCover != null;
 
     public bool Apply { get; set; }          // tag view: write this row
     public bool Recycle { get; set; }        // duplicate view: move this copy to the Recycle Bin
@@ -121,7 +124,54 @@ public static class Music
         if (s.NewArtist != null) tag.Performers = [s.NewArtist];
         if (s.NewAlbum != null) tag.Album = s.NewAlbum;
         if (s.NewTrack != null) tag.Track = s.NewTrack.Value;
+        if (s.NewCover != null)
+            tag.Pictures = [new TagLib.Picture(new TagLib.ByteVector(s.NewCover)) { Type = TagLib.PictureType.FrontCover, MimeType = "image/jpeg" }];
         file.Save();
+    }
+
+    // ---- covers (iTunes Search API: free, no key, ~20 requests/minute) ----
+
+    /// <summary>What a cover lookup searches for: songs in an album/playlist folder share one album lookup,
+    /// a single (no album) gets its own song lookup.</summary>
+    public static (string Artist, string? Album, string Title) CoverQuery(Song s)
+    {
+        var album = s.Album.Length > 0 ? s.Album : ParseName(s.Path)?.Album;
+        return (EffectiveArtist(s), string.IsNullOrEmpty(album) ? null : album, EffectiveTitle(s));
+    }
+
+    /// <summary>Front cover JPEG (600x600) for an album, or for a single song when album is null. Null = no match.
+    /// Throws HttpRequestException (403/429 when iTunes rate-limits).</summary>
+    public static async Task<byte[]?> FindCoverAsync(HttpClient http, string artist, string? album, string title)
+    {
+        var term = Uri.EscapeDataString($"{MainArtist(artist)} {album ?? NormTitle(title)}");
+        var json = await http.GetStringAsync(
+            $"https://itunes.apple.com/search?term={term}&entity={(album != null ? "album" : "song")}&limit=10").ConfigureAwait(false);
+        var url = PickArtwork(json, artist, album, title);
+        return url == null ? null : await http.GetByteArrayAsync(url).ConfigureAwait(false);
+    }
+
+    /// <summary>First search result whose artist matches and whose album (or, for a single, song title) matches;
+    /// its artwork URL upsized from 100x100 to 600x600. Better no cover than a stranger's.</summary>
+    public static string? PickArtwork(string json, string artist, string? album, string title)
+    {
+        var want = NormTitle(MainArtist(artist));
+        if (want.Length == 0) return null;
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        foreach (var r in doc.RootElement.GetProperty("results").EnumerateArray())
+        {
+            if (!NormTitle(Str(r, "artistName")).Contains(want)) continue;
+            var ok = album != null
+                ? Prefix(NormTitle(Str(r, "collectionName")), NormTitle(album)) // "Global Warming" ~ "Global Warming: Meltdown (Deluxe)"
+                : NormTitle(Str(r, "trackName")) == NormTitle(title);
+            var art = Str(r, "artworkUrl100");
+            if (ok && art.Length > 0) return art.Replace("100x100bb", "600x600bb");
+        }
+        return null;
+
+        static string Str(System.Text.Json.JsonElement e, string name) =>
+            e.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString()! : "";
+        // either starts with the other: also covers album folder names ShibaDownloader cut at 80 chars
+        static bool Prefix(string a, string b) => a.Length > 0 && b.Length > 0 && (a.StartsWith(b) || b.StartsWith(a));
     }
 
     /// <summary>

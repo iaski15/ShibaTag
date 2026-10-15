@@ -1,0 +1,99 @@
+using System.IO;
+using System.Security.Cryptography;
+
+namespace ShibaTag;
+
+/// <summary>
+/// `ShibaTag.exe --selftest [music folder]` - checks name parsing, then copies a few real files to %TEMP%,
+/// writes tags to the copies, reads them back and finds a planted duplicate. The source files are only read
+/// (their hashes are compared before and after). Prints PASS/FAIL lines; exit code 0 = all passed.
+/// Pipe it to see the output: `.\ShibaTag.exe --selftest | Write-Output`.
+/// </summary>
+public static class SelfTest
+{
+    private static int _failed;
+
+    public static int Run(string? source)
+    {
+        source ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "Global Warming");
+
+        // ---- file name parsing (no files touched) ----
+        var p = Music.ParseName(@"C:\M\Global Warming\01 - Pitbull, Sensato - Global Warming (feat. Sensato).mp3");
+        Check("album track parsed", p is { Artist: "Pitbull, Sensato", Title: "Global Warming (feat. Sensato)", Album: "Global Warming", Track: 1 });
+        p = Music.ParseName(@"C:\M\X\04 - Pitbull - Back in Time - featured in Men In Black 3.mp3");
+        Check("title keeps its own ' - '", p is { Artist: "Pitbull", Title: "Back in Time - featured in Men In Black 3", Track: 4 });
+        p = Music.ParseName(@"C:\M\X\17 - Pitbull, Marc Anthony - Rain Over Me (feat. Marc Anthony) -.mp3");
+        Check("truncated name loses dangling ' -'", p?.Title == "Rain Over Me (feat. Marc Anthony)");
+        p = Music.ParseName(@"C:\M\Singles\50 Cent - In Da Club.m4a");
+        Check("single parsed, no album/track", p is { Artist: "50 Cent", Title: "In Da Club", Album: null, Track: 0 });
+        Check("no-break space becomes a plain space", Music.ParseName("C:\\M\\A\\01 - Pitbull,\u00A0Sensato - X.mp3")?.Artist == "Pitbull, Sensato");
+        Check("unparseable name ignored", Music.ParseName(@"C:\M\random video.mp3") is null);
+
+        // ---- real files, on temp copies ----
+        var originals = Directory.Exists(source) ? Directory.GetFiles(source, "*.mp3").Order().ToList() : [];
+        if (originals.Count == 0)
+        {
+            Check($"test files found in {source}", false);
+            return Done();
+        }
+        var picks = originals.Where(f => Path.GetFileName(f) is var n && (n.StartsWith("01 - ") || n.StartsWith("04 - ") || n.StartsWith("17 - "))).ToList();
+        if (picks.Count == 0) picks = originals.Take(3).ToList();
+        var hashesBefore = picks.Select(Hash).ToList();
+
+        var tmp = Path.Combine(Path.GetTempPath(), "ShibaTag-selftest-" + Guid.NewGuid().ToString("N")[..8]);
+        var album = Path.Combine(tmp, Path.GetFileName(source));
+        Directory.CreateDirectory(album);
+        try
+        {
+            foreach (var f in picks) File.Copy(f, Path.Combine(album, Path.GetFileName(f)));
+            // A loose single copy of the first song: parses as "Artist - Title" and must show up as a duplicate.
+            var first = Music.ParseName(picks[0])!.Value;
+            var single = Path.Combine(tmp, $"{first.Artist} - {first.Title}.mp3");
+            File.Copy(picks[0], single);
+
+            var before = Music.Scan(tmp, out var bad);
+            Check($"scan found {picks.Count + 1} files", before.Count == picks.Count + 1 && bad == 0);
+            Check("duration and bitrate read", before.All(s => s.Duration.TotalSeconds > 10 && s.Bitrate > 0));
+            foreach (var s in before) Music.Propose(s);
+            foreach (var s in before.Where(s => s.HasChanges)) Music.Write(s);
+
+            var after = Music.Scan(tmp, out _);
+            foreach (var (was, now) in before.Zip(after))
+            {
+                var want = Music.ParseName(was.Path)!.Value;
+                var ok = now.Title == (was.Title.Length > 0 ? was.Title : want.Title)
+                      && now.Artist == (was.Artist.Length > 0 ? was.Artist : want.Artist)
+                      && now.Album == (was.Album.Length > 0 || want.Album is null ? was.Album : want.Album)
+                      && now.Track == (was.Track > 0 ? was.Track : want.Track)
+                      && Math.Abs((now.Duration - was.Duration).TotalSeconds) < 1;
+                Check($"tags written+read back: {now.FileName} -> {now.Track} | {now.Artist} | {now.Title} | {now.Album}", ok);
+            }
+            foreach (var s in after) Music.Propose(s);
+            Check("second pass proposes nothing", after.All(s => !s.HasChanges));
+
+            var dups = Music.FindDuplicates(after);
+            Check("planted duplicate found", dups.Count == 1 && dups[0].Count == 2 && dups[0].Any(s => s.Path == single));
+            Check("one keeper per group", dups.All(g => g.Count(s => s.IsKeeper) == 1 && g.Count(s => s.Recycle) == g.Count - 1));
+        }
+        finally
+        {
+            Directory.Delete(tmp, true);
+        }
+        Check("originals untouched", picks.Select(Hash).SequenceEqual(hashesBefore));
+        return Done();
+    }
+
+    private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+
+    private static void Check(string what, bool ok)
+    {
+        Console.WriteLine($"{(ok ? "PASS" : "FAIL")}  {what}");
+        if (!ok) _failed++;
+    }
+
+    private static int Done()
+    {
+        Console.WriteLine(_failed == 0 ? "selftest OK" : $"selftest FAILED ({_failed})");
+        return _failed == 0 ? 0 : 1;
+    }
+}

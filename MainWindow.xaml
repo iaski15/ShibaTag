@@ -1,0 +1,634 @@
+<Window x:Class="ShibaTag.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ShibaTag"
+        Title="ShibaTag"
+        Width="1180" Height="740"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" ResizeMode="NoResize"
+        Background="Transparent" AllowsTransparency="True"
+        AllowDrop="True" FontFamily="Segoe UI"
+        TextOptions.TextFormattingMode="Display"
+        DragOver="Window_DragOver" Drop="Window_Drop">
+
+    <!-- Shibaberg palette and styles: copied from ShibaDownloader's MainWindow.xaml, keep in sync -->
+    <Window.Resources>
+        <SolidColorBrush x:Key="Bg" Color="#FFF6EA"/>
+        <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="Surface2" Color="#FBEBD8"/>
+        <SolidColorBrush x:Key="Inset" Color="#FFFBF5"/>
+        <SolidColorBrush x:Key="Line" Color="#EFD9BF"/>
+        <SolidColorBrush x:Key="Text" Color="#3A2418"/>
+        <SolidColorBrush x:Key="Muted" Color="#9B7A60"/>
+        <SolidColorBrush x:Key="Fur" Color="#E8924A"/>
+        <SolidColorBrush x:Key="FurHover" Color="#EE9F5D"/>
+        <SolidColorBrush x:Key="FurDark" Color="#D27A34"/>
+        <SolidColorBrush x:Key="FurDeep" Color="#C4652A"/>
+        <SolidColorBrush x:Key="CreamText" Color="#FFF2DF"/>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="MinWidth" Value="8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.Thumb>
+                                <Thumb>
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border CornerRadius="4" Background="#EFD9BF" Margin="1,0"/>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ChromeButton" TargetType="Button">
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource Surface2}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseButton" TargetType="Button" BasedOn="{StaticResource ChromeButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#D22837"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" CornerRadius="12" Background="{StaticResource Fur}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource FurHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource FurDark}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bg" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="Padding" Value="22,0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" CornerRadius="12" Background="{StaticResource Surface2}"
+                                BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="BorderBrush" Value="{StaticResource Fur}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#F5DEC4"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bg" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+
+        <!-- MP3 / MP4 segment; Tag holds the icon glyph. -->
+        <Style x:Key="Segment" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="bg" CornerRadius="8" Background="Transparent" Height="36">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           VerticalAlignment="Center" Margin="0,1,8,0"/>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource Fur}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Padding" Value="20,16"/>
+        </Style>
+
+        <Style x:Key="CardLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <!-- Sidebar step: Tag = "1"/"2"/"3", Content = label. Code sets IsEnabled=false to mean "done". -->
+        <Style x:Key="Step" TargetType="ContentControl">
+            <Setter Property="Margin" Value="34,0,0,16"/>
+            <Setter Property="Foreground" Value="{StaticResource CreamText}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContentControl">
+                        <StackPanel Orientation="Horizontal">
+                            <Grid Width="26" Height="26">
+                                <Ellipse x:Name="dot" Fill="{StaticResource FurDark}"/>
+                                <TextBlock x:Name="num" Text="{TemplateBinding Tag}" FontSize="12.5" FontWeight="Bold"
+                                           Foreground="{StaticResource CreamText}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <TextBlock x:Name="label" Text="{TemplateBinding Content}" FontSize="13" Margin="12,0,0,0"
+                                       VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="dot" Property="Fill" Value="White"/>
+                                <Setter TargetName="num" Property="Text" Value="&#x2713;"/>
+                                <Setter TargetName="num" Property="Foreground" Value="{StaticResource FurDeep}"/>
+                                <Setter TargetName="label" Property="Foreground" Value="White"/>
+                                <Setter TargetName="label" Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- One paw print for the sidebar pattern (same shapes as Autoberg's PaintSidebar). -->
+        <DrawingBrush x:Key="PawBrush" Stretch="None">
+            <DrawingBrush.Drawing>
+                <GeometryDrawing Brush="#5AD27A34">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry Center="0,1" RadiusX="9" RadiusY="7"/>
+                            <EllipseGeometry Center="-9.5,-11" RadiusX="3.5" RadiusY="4"/>
+                            <EllipseGeometry Center="-0.5,-16" RadiusX="3.5" RadiusY="4"/>
+                            <EllipseGeometry Center="8.5,-11" RadiusX="3.5" RadiusY="4"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+
+        <!-- ShibaTag's own bits -->
+        <Style x:Key="Check" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="box" Width="17" Height="17" CornerRadius="5" Background="{StaticResource Inset}"
+                                BorderBrush="#E3C3A0" BorderThickness="1.2">
+                            <TextBlock x:Name="tick" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                       Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Hidden"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Fur}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="box" Property="Background" Value="{StaticResource Fur}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Fur}"/>
+                                <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="box" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Cell" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        </Style>
+        <Style x:Key="Num" TargetType="TextBlock" BasedOn="{StaticResource Cell}">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- proposed value under the current one; hidden when there is nothing to change -->
+        <Style x:Key="NewValue" TargetType="TextBlock" BasedOn="{StaticResource Cell}">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource FurDeep}"/>
+            <Style.Triggers>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </Trigger>
+                <Trigger Property="Text" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+        </Style>
+        <Style x:Key="Kbps" TargetType="TextBlock" BasedOn="{StaticResource Num}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLowBitrate}" Value="True">
+                    <Setter Property="Foreground" Value="#D22837"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="ToolTip" Value="Low bitrate (under 128 kbps)"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="Row" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="row" CornerRadius="8" Background="Transparent" Padding="8,5" Margin="0,0,8,0">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="row" Property="Background" Value="#FFF6EA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Margin="14" CornerRadius="12" Background="{StaticResource Bg}" ClipToBounds="True">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="3" Direction="270" Opacity="0.3"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ================= Sidebar (also the drag handle) ================= -->
+            <Border Background="{StaticResource Fur}" CornerRadius="12,0,0,12"
+                    MouseLeftButtonDown="Chrome_MouseLeftButtonDown">
+                <Grid>
+                    <Rectangle Width="30" Height="30" Margin="16,12,0,0" Fill="{StaticResource PawBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                    <Rectangle Width="30" Height="30" Margin="202,96,0,0" Fill="{StaticResource PawBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                    <Rectangle Width="30" Height="30" Margin="14,560,0,0" Fill="{StaticResource PawBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                    <Rectangle Width="30" Height="30" Margin="56,522,0,0" Fill="{StaticResource PawBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                    <Rectangle Width="30" Height="30" Margin="188,608,0,0" Fill="{StaticResource PawBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                    <Rectangle Width="30" Height="30" Margin="208,570,0,0" Fill="{StaticResource PawBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Bottom" Text="made with paws" FontSize="10.5"
+                                   Foreground="{StaticResource CreamText}" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+                        <StackPanel>
+                            <Grid Width="168" Height="168" Margin="0,26,0,0">
+                                <Ellipse Fill="{StaticResource CreamText}"/>
+                                <local:Shiba x:Name="Mascot" Width="140" Height="140" Margin="0,8,0,0"/>
+                            </Grid>
+
+                            <TextBlock Text="ShibaTag" FontSize="24" FontWeight="Bold" Foreground="White"
+                                       HorizontalAlignment="Center" Margin="0,12,0,0"/>
+
+                            <Path Data="M0,9 L9,0 L18,9 Z" Fill="White" HorizontalAlignment="Center" Margin="0,10,0,-1"/>
+                            <Border Background="White" CornerRadius="14" Margin="22,0" MinHeight="62" Padding="14,8">
+                                <TextBlock x:Name="BubbleText" FontSize="12" FontWeight="Bold"
+                                           Foreground="{StaticResource Text}" TextAlignment="Center"
+                                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="48"
+                                           VerticalAlignment="Center"
+                                           Text="Woof! Show me a music folder and I'll tidy it up."/>
+                            </Border>
+
+                            <StackPanel Margin="0,30,0,0">
+                                <ContentControl x:Name="Step1" Style="{StaticResource Step}" Tag="1" Content="Pick a music folder"/>
+                                <ContentControl x:Name="Step2" Style="{StaticResource Step}" Tag="2" Content="Check the preview"/>
+                                <ContentControl x:Name="Step3" Style="{StaticResource Step}" Tag="3" Content="Write tags or tidy dupes"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Grid>
+            </Border>
+
+            <!-- ================= Content ================= -->
+            <DockPanel Grid.Column="1">
+
+                <!-- title bar -->
+                <Grid DockPanel.Dock="Top" Height="40" Background="Transparent"
+                      MouseLeftButtonDown="Chrome_MouseLeftButtonDown">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
+                        <Button Style="{StaticResource ChromeButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Minimize"/>
+                        <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Close"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- status bar -->
+                <Border DockPanel.Dock="Bottom" Height="32" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0"
+                        Padding="26,0,20,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource Muted}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="StatusText" Margin="10,0,0,0" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Text}" VerticalAlignment="Center" Text="Ready"/>
+                    </StackPanel>
+                </Border>
+
+                <DockPanel Margin="28,0,28,16">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="Let's tidy your music" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}"/>
+                        <TextBlock Text="Fills missing tags from ShibaDownloader's file names (01 - Artist - Title) and finds duplicate copies."
+                                   FontSize="12" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
+
+                        <!-- folder -->
+                        <Border Margin="0,16,0,0" Padding="12,0,5,0" CornerRadius="8" Background="{StaticResource Surface}"
+                                BorderBrush="{StaticResource Line}" BorderThickness="1">
+                            <Grid Height="44">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock x:Name="FolderText" Grid.Column="1" FontSize="13" VerticalAlignment="Center"
+                                           Foreground="#C8B39E" TextTrimming="CharacterEllipsis"
+                                           Text="Drop a music folder here, or choose one"/>
+                                <Button x:Name="RescanButton" Grid.Column="2" Style="{StaticResource SmallButton}" Content="Rescan"
+                                        Margin="0,0,6,0" IsEnabled="False" Click="Rescan_Click"/>
+                                <Button x:Name="ChooseButton" Grid.Column="3" Style="{StaticResource SmallButton}" Content="Choose folder"
+                                        Click="Choose_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- view switch + summary -->
+                        <Grid Margin="0,14,0,0">
+                            <Border CornerRadius="10" Background="{StaticResource Surface2}" Padding="3" Width="340" HorizontalAlignment="Left">
+                                <UniformGrid Columns="2">
+                                    <RadioButton x:Name="TagsTab" Content="Tags" Tag="&#xE8EC;" GroupName="view" IsChecked="True"
+                                                 Style="{StaticResource Segment}" Checked="View_Changed"/>
+                                    <RadioButton x:Name="DupesTab" Content="Duplicates" Tag="&#xE8C8;" GroupName="view"
+                                                 Style="{StaticResource Segment}" Checked="View_Changed"/>
+                                </UniformGrid>
+                            </Border>
+                            <TextBlock x:Name="SummaryText" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12"
+                                       Foreground="{StaticResource Muted}"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- actions -->
+                    <Grid DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="ActionButton" Style="{StaticResource PrimaryButton}" Content="Write tags"
+                                IsEnabled="False" Click="Action_Click"/>
+                        <Button x:Name="OpenFolderButton" Grid.Column="1" Style="{StaticResource SecondaryButton}"
+                                Content="Open folder" Margin="14,0,0,0" IsEnabled="False" Click="OpenFolder_Click"/>
+                    </Grid>
+
+                    <!-- the list -->
+                    <Border Style="{StaticResource Card}" Margin="0,14,0,0" Padding="12,10,4,6">
+                        <Grid>
+                            <!-- tags view -->
+                            <DockPanel x:Name="TagsView">
+                                <Grid DockPanel.Dock="Top" Margin="8,0,16,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="28"/>
+                                        <ColumnDefinition Width="2*"/>
+                                        <ColumnDefinition Width="2*"/>
+                                        <ColumnDefinition Width="1.4*"/>
+                                        <ColumnDefinition Width="1.2*"/>
+                                        <ColumnDefinition Width="34"/>
+                                        <ColumnDefinition Width="44"/>
+                                        <ColumnDefinition Width="48"/>
+                                        <ColumnDefinition Width="40"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox x:Name="AllCheck" Style="{StaticResource Check}" ToolTip="Select all files with changes"
+                                              Click="AllCheck_Click"/>
+                                    <TextBlock Grid.Column="1" Text="FILE" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="2" Text="TITLE" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="3" Text="ARTIST" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="4" Text="ALBUM" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="5" Text="#" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="6" Text="COVER" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="7" Text="LENGTH" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="8" Text="KBPS" Style="{StaticResource Head}"/>
+                                </Grid>
+                                <ListBox x:Name="TagList" Background="Transparent" BorderThickness="0"
+                                         ItemContainerStyle="{StaticResource Row}"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         VirtualizingPanel.IsVirtualizing="True">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="28"/>
+                                                    <ColumnDefinition Width="2*"/>
+                                                    <ColumnDefinition Width="2*"/>
+                                                    <ColumnDefinition Width="1.4*"/>
+                                                    <ColumnDefinition Width="1.2*"/>
+                                                    <ColumnDefinition Width="34"/>
+                                                    <ColumnDefinition Width="44"/>
+                                                    <ColumnDefinition Width="48"/>
+                                                    <ColumnDefinition Width="40"/>
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox Style="{StaticResource Check}" IsChecked="{Binding Apply}"
+                                                          IsEnabled="{Binding HasChanges}" ToolTip="Write the new tags to this file"/>
+                                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                                    <TextBlock Text="{Binding FileName}" Style="{StaticResource Cell}" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding Folder}" Style="{StaticResource Cell}" FontSize="11"
+                                                               Foreground="{StaticResource Muted}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                                    <TextBlock Text="{Binding Title}" Style="{StaticResource Cell}"/>
+                                                    <TextBlock Text="{Binding NewTitle}" Style="{StaticResource NewValue}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="3" Margin="0,0,12,0">
+                                                    <TextBlock Text="{Binding Artist}" Style="{StaticResource Cell}"/>
+                                                    <TextBlock Text="{Binding NewArtist}" Style="{StaticResource NewValue}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="4" Margin="0,0,12,0">
+                                                    <TextBlock Text="{Binding Album}" Style="{StaticResource Cell}"/>
+                                                    <TextBlock Text="{Binding NewAlbum}" Style="{StaticResource NewValue}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="5">
+                                                    <TextBlock Text="{Binding TrackText}" Style="{StaticResource Num}"/>
+                                                    <TextBlock Text="{Binding NewTrackText}" Style="{StaticResource NewValue}" FontFamily="Consolas"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="6" Text="{Binding CoverText}" Style="{StaticResource Num}"/>
+                                                <TextBlock Grid.Column="7" Text="{Binding LengthText}" Style="{StaticResource Num}"/>
+                                                <TextBlock Grid.Column="8" Text="{Binding BitrateText}" Style="{StaticResource Kbps}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+
+                            <!-- duplicates view -->
+                            <DockPanel x:Name="DupesView" Visibility="Collapsed">
+                                <Grid DockPanel.Dock="Top" Margin="8,0,16,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="28"/>
+                                        <ColumnDefinition Width="3*"/>
+                                        <ColumnDefinition Width="2*"/>
+                                        <ColumnDefinition Width="44"/>
+                                        <ColumnDefinition Width="48"/>
+                                        <ColumnDefinition Width="40"/>
+                                        <ColumnDefinition Width="56"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="BIN" Style="{StaticResource Head}" ToolTip="Ticked copies go to the Recycle Bin"/>
+                                    <TextBlock Grid.Column="1" Text="FILE" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="2" Text="ALBUM" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="3" Text="COVER" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="4" Text="LENGTH" Style="{StaticResource Head}"/>
+                                    <TextBlock Grid.Column="5" Text="KBPS" Style="{StaticResource Head}"/>
+                                </Grid>
+                                <Grid>
+                                    <TextBlock x:Name="NoDupesText" Text="No duplicates here. Good dog." FontSize="13"
+                                               Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,40,0,0"/>
+                                    <ListBox x:Name="DupList" Background="Transparent" BorderThickness="0"
+                                             ItemContainerStyle="{StaticResource Row}"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ListBox.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="Bold"
+                                                                   Foreground="{StaticResource FurDeep}" Margin="8,10,0,2"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </DataTemplate>
+                                                </GroupStyle.HeaderTemplate>
+                                            </GroupStyle>
+                                        </ListBox.GroupStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="28"/>
+                                                        <ColumnDefinition Width="3*"/>
+                                                        <ColumnDefinition Width="2*"/>
+                                                        <ColumnDefinition Width="44"/>
+                                                        <ColumnDefinition Width="48"/>
+                                                        <ColumnDefinition Width="40"/>
+                                                        <ColumnDefinition Width="56"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <CheckBox Style="{StaticResource Check}" IsChecked="{Binding Recycle}"
+                                                              ToolTip="Move this copy to the Recycle Bin"/>
+                                                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                                        <TextBlock Text="{Binding FileName}" Style="{StaticResource Cell}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding Folder}" Style="{StaticResource Cell}" FontSize="11"
+                                                                   Foreground="{StaticResource Muted}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Album}" Style="{StaticResource Cell}"
+                                                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding CoverText}" Style="{StaticResource Num}"/>
+                                                    <TextBlock Grid.Column="4" Text="{Binding LengthText}" Style="{StaticResource Num}"/>
+                                                    <TextBlock Grid.Column="5" Text="{Binding BitrateText}" Style="{StaticResource Kbps}"/>
+                                                    <Border Grid.Column="6" CornerRadius="6" Background="{StaticResource Fur}" Padding="6,1"
+                                                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                            ToolTip="Best copy: highest bitrate">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsKeeper}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="best" FontSize="10.5" FontWeight="Bold" Foreground="White"/>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+                            </DockPanel>
+                        </Grid>
+                    </Border>
+                </DockPanel>
+            </DockPanel>
+        </Grid>
+    </Border>
+</Window>
